@@ -1,0 +1,33 @@
+# Merge these sections into $KIMI_CODE_HOME/config.toml.
+# Reference copy; the installed config is the source of truth.
+
+[[permission.rules]]
+decision = "deny"
+pattern = "Write"
+reason = "read-only reviewer: file creation/overwrite disabled"
+
+[[permission.rules]]
+decision = "deny"
+pattern = "Edit"
+reason = "read-only reviewer: in-place edits disabled"
+
+[[permission.rules]]
+decision = "deny"
+pattern = "Agent"
+reason = "no sub-agents: hook coverage inside sub-agents unverified; quota burn"
+
+[[permission.rules]]
+decision = "deny"
+pattern = "AgentSwarm"
+reason = "no sub-agents: same rationale as Agent"
+
+[[permission.rules]]
+decision = "deny"
+pattern = "CronCreate"
+reason = "headless reviewer must not schedule future prompts"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<KIMI_CODE_HOME>\hooks\bash-readonly-guard.ps1"'
+timeout = 10
