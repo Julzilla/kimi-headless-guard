@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  PreToolUse Bash guard for the PAL clink headless code reviewer (Kimi Code CLI).
+  PreToolUse Bash guard for a headless Kimi Code CLI reviewer.
 
 .DESCRIPTION
   Fail-closed allowlist. Only these may run:
