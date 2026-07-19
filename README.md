@@ -75,6 +75,24 @@ This is why a tiered design fails: put `allow Bash(git status*)` first and
 `deny Bash` last as a catch-all, and the catch-all silently wins. Every allow is
 dead. It looks like a working allowlist and is a blanket denial.
 
+**Confirmed from source.** On
+[kimi-code#1901](https://github.com/MoonshotAI/kimi-code/issues/1901) a reader
+traced the same behaviour in the published source at commit `a41a09c`. The
+policy chain is class-ordered and evaluation returns on the first defined
+result, so precedence is fixed by class and never by position in `config.toml`:
+`packages/agent-core/src/agent/permission/policies/index.ts` L38-47 (deny L39,
+ask L45, allow L47, under the header comment at L27), with the same ordering in
+`packages/agent-core-v2/src/agent/permissionPolicy/permissionPolicyService.ts`
+L43-62 and its evaluate loop at L72-75.
+
+**In headless mode it is worse than deny > ask > allow.**
+`AutoModeApprovePermissionPolicy` sits between the deny and the ask, at
+`index.ts` L40-41, commented "auto mode → approve (any auto-mode block must be a
+deny rule above this)". Because `--prompt` runs in auto permission mode,
+evaluation stops there and your `allow` and `ask` rules are never reached. For
+an unattended run **`deny` is the only user-configured class that does
+anything**, which is why layer 1 below is denies only.
+
 ### 4. Argument-pattern globs leak
 
 `deny Bash(*>*)` looks like it blocks redirection. In testing it emitted a
@@ -93,6 +111,20 @@ This is undocumented and it is the finding this whole approach rests on. Hooks
 are session-level, and print mode is a session. Verified: a `PreToolUse` hook on
 `Bash` fired, wrote its audit entry, and the blocked command left nothing on
 disk.
+
+The source shows why it works. In `agent-core`,
+`PreToolCallHookPermissionPolicy` is the **first** entry in the chain
+(`policies/index.ts` L31 at commit `a41a09c`), ahead of the auto-mode approval
+at L40-41. A hook is therefore the only user-controlled thing that runs before
+auto mode approves a call.
+
+**Caveat for a future version.** `agent-core-v2` has no equivalent policy in its
+chain or in `permissionPolicy/policies/`, and it imports its hook context from
+`#/agent/toolExecutor/toolHooks`, so the mechanism appears to have moved to the
+executor layer. Whether PreToolUse still runs ahead of the auto-mode approval
+under v2 is unverified. Combined with finding 7, a hook that stops being
+consulted fails open silently. Re-run the suite and check `guard-log.jsonl`
+after any CLI upgrade.
 
 ### 7. Hooks are fail-open
 
