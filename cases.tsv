@@ -1,0 +1,135 @@
+# Shared spec for the guard test suites. One case per line: <expect><TAB><command>
+# Read by BOTH Test-BashGuard.ps1 and test-bash-guard.sh so the PowerShell and
+# POSIX guards are held to identical cases and cannot drift apart.
+#
+# expect is 'allow' (hook exits 0) or 'deny' (hook exits 2). Any other exit
+# code is a LEAK: that is the fail-open path and must never happen.
+#
+# Control characters in a command are backslash-escaped (n, r, t, and a
+# doubled backslash). The newline case matters: a raw newline separates
+# commands, so the metacharacter screen must deny it.
+allow	git status
+allow	git status --short
+allow	git diff HEAD~1 --stat
+allow	git diff --cached
+allow	git log --oneline -10
+allow	git log --pretty=format:%H -5
+allow	git log -p --follow -- src/app.ts
+allow	git show HEAD:src/main.py
+allow	git show HEAD@{1} --stat
+allow	git blame -L 10,20 -- file.py
+allow	git ls-files
+allow	git ls-tree -r HEAD --name-only
+allow	git grep -n TODO -- src
+allow	git branch -v
+allow	git branch -a --list feat*
+allow	git branch --show-current
+allow	git branch --contains HEAD
+allow	git tag -l
+allow	git tag --list v1.* --sort=-creatordate
+allow	git remote
+allow	git remote -v
+allow	git remote get-url origin
+allow	git rev-parse HEAD
+allow	git reflog show -10
+allow	git stash list
+allow	git stash show -p stash@{0}
+allow	git describe --tags --always
+allow	git shortlog -sn
+allow	git count-objects -v
+allow	git -C /path/to/repo status
+allow	git --version
+allow	ls -la
+allow	pwd
+allow	where python
+allow	which git
+allow	cat README.md
+allow	head -20 Program.cs
+allow	tail -n 50 app.log
+allow	wc -l *.py
+allow	find . -name *.cs -type f
+allow	rg -n "class Foo" src
+allow	grep -rn TODO src
+allow	node --version
+allow	npm --version
+allow	python --version
+allow	dotnet --version
+allow	go version
+allow	sha256sum setup.py
+allow	jq . package.json
+allow	sort -u ids.txt
+allow	diff a.txt b.txt
+allow	echo hello
+allow	whoami
+allow	uname -a
+allow	du -sh .
+allow	file README.md
+deny	echo hi > out.txt
+deny	git log | head
+deny	ls && rm -rf x
+deny	ls; rm x
+deny	git push
+deny	git push origin main
+deny	git commit -m wip
+deny	git checkout .
+deny	git restore .
+deny	git clean -fdx
+deny	git reset --hard HEAD
+deny	git merge feature
+deny	git rebase main
+deny	git branch new-feature
+deny	git branch -d old
+deny	git branch --unset-upstream
+deny	git tag v1.0
+deny	git stash
+deny	git stash pop
+deny	git fetch origin
+deny	git pull
+deny	git -c alias.st=!notepad st
+deny	git --exec-path=. status
+deny	git diff --output=patch.diff
+deny	git log --ext-diff
+deny	git show --textconv HEAD:file
+deny	git config user.name x
+deny	git submodule update --init
+deny	git worktree add ../x
+deny	git remote add origin https://example.com/x.git
+deny	git reflog expire --expire=now --all
+deny	rm -rf node_modules
+deny	rm out.txt
+deny	mv a b
+deny	cp a b
+deny	touch newfile
+deny	mkdir subdir
+deny	del foo.txt
+deny	cmd /c del foo.txt
+deny	powershell -Command Remove-Item x
+deny	curl https://example.com -o f
+deny	wget https://example.com
+deny	python -c pass
+deny	node -e pass
+deny	sed -i s/a/b/ f
+deny	sed -n "w out.txt" f
+deny	find . -delete
+deny	find . -exec rm
+deny	rg --pre cat foo
+deny	npm install
+deny	npm run build
+deny	pip install requests
+deny	sort -o out.txt in.txt
+deny	tee out.txt
+deny	tar cf out.tgz dir
+deny	env
+deny	printenv
+deny	kill 1234
+deny	xargs rm
+deny	FOO=bar git status
+deny	ls $(pwd)
+deny	echo `pwd`
+deny	cat a > b
+deny	ls\nrm x
+deny	git svn dcommit
+deny	git am
+deny	git apply patch.diff
+deny	git gc
+deny	git update-index --refresh

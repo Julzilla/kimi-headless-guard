@@ -61,140 +61,42 @@ function Invoke-Case {
 }
 
 # ---------------- must be ALLOWED ----------------
-$allow = @(
-    'git status',
-    'git status --short',
-    'git diff HEAD~1 --stat',
-    'git diff --cached',
-    'git log --oneline -10',
-    'git log --pretty=format:%H -5',
-    'git log -p --follow -- src/app.ts',
-    'git show HEAD:src/main.py',
-    'git show HEAD@{1} --stat',
-    'git blame -L 10,20 -- file.py',
-    'git ls-files',
-    'git ls-tree -r HEAD --name-only',
-    'git grep -n TODO -- src',
-    'git branch -v',
-    'git branch -a --list feat*',
-    'git branch --show-current',
-    'git branch --contains HEAD',
-    'git tag -l',
-    'git tag --list v1.* --sort=-creatordate',
-    'git remote',
-    'git remote -v',
-    'git remote get-url origin',
-    'git rev-parse HEAD',
-    'git reflog show -10',
-    'git stash list',
-    'git stash show -p stash@{0}',
-    'git describe --tags --always',
-    'git shortlog -sn',
-    'git count-objects -v',
-    'git -C /path/to/repo status',
-    'git --version',
-    'ls -la',
-    'pwd',
-    'where python',
-    'which git',
-    'cat README.md',
-    'head -20 Program.cs',
-    'tail -n 50 app.log',
-    'wc -l *.py',
-    'find . -name *.cs -type f',
-    'rg -n "class Foo" src',
-    'grep -rn TODO src',
-    'node --version',
-    'npm --version',
-    'python --version',
-    'dotnet --version',
-    'go version',
-    'sha256sum setup.py',
-    'jq . package.json',
-    'sort -u ids.txt',
-    'diff a.txt b.txt',
-    'echo hello',
-    'whoami',
-    'uname -a',
-    'du -sh .',
-    'file README.md'
-)
+# Cases live in cases.tsv, which test-bash-guard.sh reads too, so the
+# PowerShell and POSIX guards are held to identical inputs and cannot drift
+# apart. Format: <expect><TAB><command>, with control characters escaped as
+# \n, \r, \t and a doubled backslash.
+$CasesPath = Join-Path $PSScriptRoot 'cases.tsv'
+if (-not (Test-Path $CasesPath)) { throw "cases.tsv not found beside the suite: $CasesPath" }
 
-# ---------------- must be DENIED ----------------
-$deny = @(
-    'echo hi > out.txt',
-    'git log | head',
-    'ls && rm -rf x',
-    'ls; rm x',
-    'git push',
-    'git push origin main',
-    'git commit -m wip',
-    'git checkout .',
-    'git restore .',
-    'git clean -fdx',
-    'git reset --hard HEAD',
-    'git merge feature',
-    'git rebase main',
-    'git branch new-feature',
-    'git branch -d old',
-    'git branch --unset-upstream',
-    'git tag v1.0',
-    'git stash',
-    'git stash pop',
-    'git fetch origin',
-    'git pull',
-    'git -c alias.st=!notepad st',
-    'git --exec-path=. status',
-    'git diff --output=patch.diff',
-    'git log --ext-diff',
-    'git show --textconv HEAD:file',
-    'git config user.name x',
-    'git submodule update --init',
-    'git worktree add ../x',
-    'git remote add origin https://example.com/x.git',
-    'git reflog expire --expire=now --all',
-    'rm -rf node_modules',
-    'rm out.txt',
-    'mv a b',
-    'cp a b',
-    'touch newfile',
-    'mkdir subdir',
-    'del foo.txt',
-    'cmd /c del foo.txt',
-    'powershell -Command Remove-Item x',
-    'curl https://example.com -o f',
-    'wget https://example.com',
-    'python -c pass',
-    'node -e pass',
-    'sed -i s/a/b/ f',
-    'sed -n "w out.txt" f',
-    'find . -delete',
-    'find . -exec rm',
-    'rg --pre cat foo',
-    'npm install',
-    'npm run build',
-    'pip install requests',
-    'sort -o out.txt in.txt',
-    'tee out.txt',
-    'tar cf out.tgz dir',
-    'env',
-    'printenv',
-    'kill 1234',
-    'xargs rm',
-    'FOO=bar git status',
-    'ls $(pwd)',
-    'echo `pwd`',
-    'cat a > b',
-    "ls`nrm x",
-    'git svn dcommit',
-    'git am',
-    'git apply patch.diff',
-    'git gc',
-    'git update-index --refresh'
-)
+function Expand-CaseEscapes {
+    param([string]$Text)
+    $sb = [System.Text.StringBuilder]::new()
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        $c = $Text[$i]
+        if ($c -eq [char]92 -and $i + 1 -lt $Text.Length) {
+            $n = $Text[$i + 1]
+            switch ($n) {
+                'n'     { [void]$sb.Append([char]10); $i++; continue }
+                'r'     { [void]$sb.Append([char]13); $i++; continue }
+                't'     { [void]$sb.Append([char]9);  $i++; continue }
+                default {
+                    if ($n -eq [char]92) { [void]$sb.Append([char]92); $i++; continue }
+                }
+            }
+        }
+        [void]$sb.Append($c)
+    }
+    $sb.ToString()
+}
 
-foreach ($c in $allow) { Invoke-Case -Cmd $c -Expect 'allow' }
-foreach ($c in $deny)  { Invoke-Case -Cmd $c -Expect 'deny'  }
+$cases = foreach ($line in (Get-Content $CasesPath -Encoding utf8)) {
+    if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#')) { continue }
+    $parts = $line -split [char]9, 2
+    if ($parts.Count -ne 2) { continue }
+    [pscustomobject]@{ Expect = $parts[0]; Cmd = Expand-CaseEscapes $parts[1] }
+}
+
+foreach ($c in $cases) { Invoke-Case -Cmd $c.Cmd -Expect $c.Expect }
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed, {2} total" -f $script:pass, $script:fail, ($script:pass + $script:fail))

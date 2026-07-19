@@ -26,8 +26,24 @@ decision = "deny"
 pattern = "CronCreate"
 reason = "headless reviewer must not schedule future prompts"
 
+# Pick ONE of the two hook blocks below, matching your platform, and replace
+# <KIMI_CODE_HOME> with the absolute path. A relative path will not resolve:
+# the hook runs with the reviewed repository as its working directory, not this
+# config's directory.
+
+# --- Windows ---
 [[hooks]]
 event = "PreToolUse"
 matcher = "Bash"
 command = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<KIMI_CODE_HOME>\hooks\bash-readonly-guard.ps1"'
 timeout = 10
+
+# --- macOS / Linux ---
+# Needs jq or python3 on PATH to read the hook payload; the guard denies if it
+# cannot find a working one. Remember chmod +x on the script.
+#
+# [[hooks]]
+# event = "PreToolUse"
+# matcher = "Bash"
+# command = '/bin/bash "<KIMI_CODE_HOME>/hooks/bash-readonly-guard.sh"'
+# timeout = 10

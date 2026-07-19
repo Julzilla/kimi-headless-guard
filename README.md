@@ -5,11 +5,31 @@ the obvious approaches don't work.
 
 Tested against **Kimi Code CLI v0.27.0 on Windows 11**.
 
-The findings apply to any platform. The guard itself is **PowerShell and Windows
-only** — I don't have macOS or Linux to test on, so I'd rather say that plainly
-than pretend otherwise. A port is welcome; the logic is a tokeniser, an
-allowlist and a metacharacter screen, and the 125-case suite defines the
-expected behaviour precisely enough to port against.
+The findings apply to any platform. The guard ships twice, once in PowerShell
+and once in bash:
+
+| | Script | Suite |
+|---|---|---|
+| Windows | `bash-readonly-guard.ps1` | `Test-BashGuard.ps1` |
+| macOS / Linux | `bash-readonly-guard.sh` | `test-bash-guard.sh` |
+
+Both read the same 125 cases from `cases.tsv`, so they cannot drift apart
+without a suite failing. Both pass 125/125, and they were differential-tested
+against each other on a further 30 commands outside the suite, agreeing on
+every decision.
+
+One caveat I would rather state than paper over: **the bash guard was written
+and tested on Windows**, under GNU bash 5.2 (Git for Windows) and against the
+same synthetic payloads, not against a live Kimi Code CLI on Linux. The logic
+is verified; what is unverified is a real Linux hook invocation end to end. If
+you run it there, check that `hooks/guard-log.jsonl` gains a line when a
+command is denied. A denial with no log line means the hook never ran, which
+is the fail-open path described below.
+
+The bash version needs `jq` or `python3` to read the hook payload. It probes
+each candidate by parsing a known document before trusting it, rather than
+checking the binary exists, because on Windows `python3` resolves to a Store
+stub that exists and never runs. If no working parser is found it denies.
 
 ---
 
@@ -128,26 +148,41 @@ finding 7.** That log is your only detection mechanism, so audit it.
 
 ## Install
 
-1. Copy `bash-readonly-guard.ps1` to `$KIMI_CODE_HOME/hooks/`.
+1. Copy the guard for your platform to `$KIMI_CODE_HOME/hooks/`:
+   `bash-readonly-guard.ps1` on Windows, `bash-readonly-guard.sh` elsewhere
+   (`chmod +x` it).
 2. Merge `config.example.toml` into `$KIMI_CODE_HOME/config.toml`, replacing the
-   placeholder path in the hook `command` with your absolute path.
+   placeholder path in the hook `command` with your absolute path. On macOS or
+   Linux the command is `/bin/bash "/path/to/bash-readonly-guard.sh"`.
 3. Validate: `kimi doctor config <path to your config.toml>`
 4. Run the test suite (below). It costs no tokens.
+
+`kimi doctor config` reports OK for tables it does not recognise, so a passing
+doctor is not evidence the hook is wired up. The suite is.
 
 ---
 
 ## Testing
 
-`Test-BashGuard.ps1` runs 125 cases against the hook directly, with no CLI and no
-API calls:
+Both suites run the same 125 cases from `cases.tsv` against the hook directly,
+with no CLI and no API calls:
 
 ```
+# Windows
 powershell -NoProfile -ExecutionPolicy Bypass -File Test-BashGuard.ps1 -HookPath <path to bash-readonly-guard.ps1>
+
+# macOS / Linux
+./test-bash-guard.sh                       # guard next to the script
+./test-bash-guard.sh /path/to/guard.sh     # or point at an installed copy
 ```
 
-54 read-only commands expected to pass, 71 write or dangerous variants expected
+56 read-only commands expected to pass, 69 write or dangerous variants expected
 to be denied, including `git -c alias.x=!cmd`, bare `git stash`, `git fetch` and
 `git pull` (all of which modify `.git`), `find -exec`, `rg --pre` and `sort -o`.
+
+An exit code that is neither 0 nor 2 is reported as a LEAK rather than a plain
+failure, because that is the fail-open path: the hook crashed, and Kimi treats
+a crashed hook as permission granted.
 
 ### Denial messages lie
 
